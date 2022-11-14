@@ -1,28 +1,25 @@
-/************************************************************************************************
-    Esp32_SMA-Inverter - An Arduino project to read data from a SMA Inverter via ESP32 bluetooth
-    License: Attribution-NonCommercial-ShareAlike 3.0 Unported (CC BY-NC-SA 3.0)
-    http://creativecommons.org/licenses/by-nc-sa/3.0/
-    You are free:
-        to Share - to copy, distribute and transmit the work
-        to Remix - to adapt the work
-    Under the following conditions:
-    Attribution:
-        You must attribute the work in the manner specified by the author or licensor
-        (but not in any way that suggests that they endorse you or your use of the work).
-    Noncommercial:
-        You may not use this work for commercial purposes.
-    Share Alike:
-        If you alter, transform, or build upon this work, you may distribute the resulting work
-        only under the same or similar license to this one.
-DISCLAIMER:
-    A user of Esp32_SMA-Inverter software acknowledges that he or she is receiving this
-    software on an "as is" basis and the user is not relying on the accuracy
-    or functionality of the software for any purpose. The user further
-    acknowledges that any use of this software will be at his own risk
-    and the copyright owner accepts no responsibility whatsoever arising from
-    the use or application of the software.
-    SMA is a registered trademark of SMA Solar Technology AG
-************************************************************************************************/
+MIT License
+
+Copyright (c) 2022 Lupo135
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+/
 
 //*** debug ****************
 // 0=none; 
@@ -50,7 +47,7 @@ const char BTPin[] = {'0','0','0','0',0}; // BT pin Always 0000. (not login pass
 
 #define USERGROUP UG_USER
 // SMA login password for UG_USER or UG_INSTALLER always 12 char. Unused=0x00
-const char SmaInvPass[]={'1','1','F','r','a','n','z','1','1',0,0,0}; 
+const char SmaInvPass[]={'P','a','s','s','w','o','r','d',0,0,0,0}; 
 uint8_t SmaBTAddress[6]  = {0x00, 0x80, 0x25, 0x29, 0xEB, 0xD3}; // my SMA SMC6000TL 00:80:25:29:eb:d3 
 uint8_t EspBTAddress[6]; // is retrieved from BT packet
 
