@@ -1,4 +1,4 @@
-MIT License
+/* MIT License
 
 Copyright (c) 2022 Lupo135
 
@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-/
+*/
 
 //*** debug ****************
 // 0=none; 
@@ -33,6 +33,9 @@ SOFTWARE.
 #include "BluetoothSerial.h"
 
 #include "Utils.h"
+#ifdef SMA_WEBSERVER
+#include "SMA_webserver.h"
+#endif
 
 const uint16_t AppSUSyID = 125;
 uint32_t  AppSerial;
@@ -65,6 +68,9 @@ void setup() {
                pInvData->BTAddress[2], pInvData->BTAddress[1], pInvData->BTAddress[0]);
   SerialBT.begin("ESP32test", true);   // "true" creates this device as a BT Master.
   SerialBT.setPin(&BTPin[0]); 
+#ifdef SMA_WEBSERVER
+  setupWebserver();
+#endif
 } 
 
 void loop() { 
