@@ -22,13 +22,14 @@ SOFTWARE.
 */
 
 
-#define tokWh(value64)  (double)(value64)/1000
-#define tokW(value32)   (float)(value32)/1000
-#define toHour(value64) (double)(value64)/3600
-#define toAmp(value32)  (float)value32/1000
-#define toVolt(value32) (float)value32/100
-#define toHz(value32)   (float)value32/100
-#define toTemp(value32) (float)value32/100
+#define tokWh(value64)    (double)(value64)/1000
+#define tokW(value32)     (float)(value32)/1000
+#define toHour(value64)   (double)(value64)/3600
+#define toAmp(value32)    (float)(value32)/1000
+#define toVolt(value32)   (float)(value32)/100
+#define toHz(value32)     (float)(value32)/100
+#define toPercent(value32)(float)(value32)/100
+#define toTemp(value32)   (float)(value32)/100
 
 int32_t value32 = 0;
 int64_t value64 = 0;
@@ -61,6 +62,7 @@ struct InverterData {
     int32_t Udc;
     int32_t Idc;
     int32_t Freq;
+    int32_t Eta;
     uint64_t EToday;
     uint64_t ETotal;
     uint64_t OperationTime;
@@ -426,15 +428,11 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
                   pInvData->Idc = value32;
                   DEBUG1_PRINTF("\nIdc %15.2f A  ", toAmp(value32));
                   printUnixTime(datetime);
-                  break;
-       
-              case MeteringTotWhOut: //SPOT_ETOTAL
-                  //In case SPOT_ETODAY missing, this function gives us inverter time (eg: SUNNY TRIPOWER 6.0)
-                  //pInvData->InverterDatetime = datetime;
-                  pInvData->ETotal = value64;
-                  //debug_kwh("SPOT_ETOTAL", value64, datetime);
-                  DEBUG1_PRINTF("\nE-Total %11.3f kWh", tokWh(value64));
-                  printUnixTime(datetime);
+                  if ((pInvData->Udc!=0) && (pInvData->Idc != 0))
+                    pInvData->Eta = ((uint64_t)pInvData->Uac * (uint64_t)pInvData->Iac * 10000) /
+                                    ((uint64_t)pInvData->Udc * (uint64_t)pInvData->Idc );
+                  else pInvData->Eta = 0;
+                  DEBUG1_PRINTF("\nEfficiency %8.2f %%", toPercent(pInvData->Eta));
                   break;
        
               case MeteringDyWhOut: //SPOT_ETODAY
@@ -443,6 +441,15 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
                   pInvData->EToday = value64;
                   //debug_kwh("SPOT_ETODAY", value64, datetime);
                   DEBUG1_PRINTF("\nE-Today %11.3f kWh", tokWh(value64));
+                  printUnixTime(datetime);
+                  break;
+       
+              case MeteringTotWhOut: //SPOT_ETOTAL
+                  //In case SPOT_ETODAY missing, this function gives us inverter time (eg: SUNNY TRIPOWER 6.0)
+                  //pInvData->InverterDatetime = datetime;
+                  pInvData->ETotal = value64;
+                  //debug_kwh("SPOT_ETOTAL", value64, datetime);
+                  DEBUG1_PRINTF("\nE-Total %11.3f kWh", tokWh(value64));
                   printUnixTime(datetime);
                   break;
        
