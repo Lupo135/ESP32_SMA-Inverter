@@ -199,10 +199,11 @@ E_RC getPacket(uint8_t expAddr[6], int wait4Command) {
       BTrdBuf[rdCnt]= BTgetByte();
       if (ReadTimeout)  break;
     }
-    if (rdCnt == 0) return E_NODATA;
+    if (rdCnt<17) return E_NODATA;
     // Validate L1 header
-   //if (!((BTrdBuf[0] ^ BTrdBuf[1] ^ BTrdBuf[2]) == BTrdBuf[3])) {
-   //  DEBUG1_PRINT("\nWrong L1 CRC!!" );
+   if (!((BTrdBuf[0] ^ BTrdBuf[1] ^ BTrdBuf[2]) == BTrdBuf[3])) {
+     DEBUG1_PRINT("\nWrong L1 CRC!!" );
+   }
    //#if (DEBUG_SMA > 2)
    //  HexDump(BTrdBuf, rdCnt, 10, 'R');
    //#endif
@@ -277,7 +278,7 @@ E_RC getPacket(uint8_t expAddr[6], int wait4Command) {
     }
     if (BTrdBuf[0] != '\x7e') { 
        SerialBT.flush();
-       DEBUG3_PRINT("\nCommBuf[0]!=0x7e -> BT-flush");
+       DEBUG2_PRINT("\nCommBuf[0]!=0x7e -> BT-flush");
     }
   } while (((pL1Hdr->command != wait4Command) || (rc == E_RETRY)) && (0xFF != wait4Command));
 
@@ -332,21 +333,18 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
     uint8_t pcktcount = 0;
     bool  validPcktID = false;
     do {
-     do {
+    do {
       pInvData->status = getPacket(pInvData->BTAddress, 0x0001);
    
       if (pInvData->status != E_OK) return pInvData->status;
-      if (!validateChecksum()) {
-        pInvData->status = E_CHKSUM;
-        return pInvData->status;
-      } else { // packet complete -> check content
+      if (validateChecksum()) {
         if ((pInvData->status = (E_RC)get_u16(pcktBuf + 23)) != E_OK) {
           DEBUG2_PRINTF("Packet status: 0x%02X\n", pInvData->status);
           return pInvData->status;
         }
-      // *** analyze received data ***
+        // *** analyze received data ***
         pcktcount = get_u16(pcktBuf + 25);
-        uint8_t rcvpcktID = get_u16(pcktBuf + 27) & 0x7FFF;
+        uint16_t rcvpcktID = get_u16(pcktBuf + 27) & 0x7FFF;
         if (pcktID == rcvpcktID) {
           if ((get_u16(pcktBuf + 15) == pInvData->SUSyID) 
             && (get_u32(pcktBuf + 17) == pInvData->Serial)) {
@@ -354,8 +352,8 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
             value32 = 0;
             value64 = 0;
             uint16_t recordsize = 4 * ((uint32_t)pcktBuf[5] - 9) / (get_u32(pcktBuf + 37) - get_u32(pcktBuf + 33) + 1);
-            DEBUG2_PRINTF("\npcktID=0x%04x recordsize=%d pcktBufPos=%d pcktcount=%04x", 
-                                           recordsize, pcktBufPos, rcvpcktID, pcktcount);
+            DEBUG2_PRINTF("\rpcktID=0x%04x recsize=%d BufPos=%d pcktCnt=%04x", 
+                            rcvpcktID,   recordsize, pcktBufPos, pcktcount);
             for (uint16_t ii = 41; ii < pcktBufPos - 3; ii += recordsize) {
               uint8_t *recptr = pcktBuf + ii;
               uint32_t code = get_u32(recptr);
@@ -368,7 +366,7 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
        
               if (recordsize == 16) {
                 value64 = get_u64(recptr + 8);
-                DEBUG2_PRINTF("\nvalue64=%d=0x%016x",value64, value64);
+                DEBUG3_PRINTF("\nvalue64=%d=0x%08x",value64, value64);
        
                   //if (is_NaN(value64) || is_NaN((uint64_t)value64)) value64 = 0;
               } else if ((dataType != 16) && (dataType != 8)) { // ((dataType != DT_STRING) && (dataType != DT_STATUS)) {
@@ -408,7 +406,7 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
                   break;
        
               case GridMsHz: //SPOT_FREQ
-                  //pInvData->GridFreq = value32;
+                  pInvData->Freq = value32;
                   DEBUG1_PRINTF("\nFreq %14.2f Hz ", toHz(value32));
                   printUnixTime(datetime);
                   break;
@@ -485,13 +483,16 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
             DEBUG3_PRINTF("*** Wrong SUSyID=%04x=%04x Serial=%08x=%08x", 
                  get_u16(pcktBuf + 15), pInvData->SUSyID, get_u32(pcktBuf + 17),pInvData->Serial);
           }
-        } else {
-          DEBUG3_PRINTF("Packet ID mismatch: exp=0x%02X is=0x%02X\n", pcktID, rcvpcktID);
+        } else {  // wrong PacketID
+          DEBUG3_PRINTF("PacketID mismatch: exp=0x%04X is=0x%04X\n", pcktID, rcvpcktID);
           validPcktID = false;
           pcktcount = 0;
         }
-      } // valid checksum
-    } while (pcktcount > 0);
+      } else { // invalid Checksum
+        pInvData->status = E_CHKSUM;
+        return pInvData->status;
+      }
+   } while (pcktcount > 0);
    } while (!validPcktID);
    return pInvData->status;
 }
@@ -622,7 +623,7 @@ E_RC getInverterData(enum getInverterDataType type) {
   for (uint8_t retries=1;; retries++) {
     rc = getInverterDataCfl(command, first, last);
     if (rc != E_OK) {
-      if (retries>5) {
+      if (retries>2) {
          return rc;
       }
       DEBUG2_PRINTF("\nRetrying.%d",retries);

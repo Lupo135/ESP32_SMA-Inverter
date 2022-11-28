@@ -52,25 +52,35 @@ bool setupWebserver() {
 }
 
 void SMA_ServeAll() {
-  char temp[256];
-  snprintf(temp, 256,"\
-Pac     %15.3f kW\n\
-Uac     %15.3f V\n\
-Iac     %15.3f A\n\
-Udc     %15.3f V\n\
-Idc     %15.3f A\n\
-E-Today %15.3f kWh\n\
-E-Total %15.3f kWh\n\
-Efficiency %11.2f %%\n"
+char temp[1024];
+snprintf(temp, 1024,"<html><head><meta http-equiv=\"refresh\" content=\"%d\"><body>\n\
+<style type=\"text/css\">\n\
+#customers {align:middle; border-collapse:collapse;}\n\
+#customers td, #customers th {align:middle; text-align:center; font-size:30%; border:1px solid #98bf21; padding:3px 7px 2px 7px; }\n\
+#customers tr:nth-child(odd) {background:#EAF2D3;} .vCenter {display:flex;justify-content:center;margin:5px;}\n\
+</style> <table align=\"left\" id=\"customers\" vspace=5 style=\"margin-bottom:5px;\">\n\
+<tr><td>Pac</td><td>%1.3f kW</td></tr>\n\
+<tr><td>Udc</td><td>%1.1f V</td></tr>\n\
+<tr><td>Idc</td><td>%1.3f A</td></tr>\n\
+<tr><td>Uac</td><td>%1.1f V</td></tr>\n\
+<tr><td>Iac</td><td>%1.3f A</td></tr>\n\
+<tr><td>E-Today</td><td>%1.3f kWh</td></tr>\n\
+<tr><td>E-Total</td><td>%1.3f kWh</td></tr>\n\
+<tr><td>Frequency</td><td>%1.2f Hz</td></tr>\n\
+<tr><td>Efficiency</td><td> %1.2f %%</td></tr>\n\
+</table></body></html>"
+, LOOPTIME_SEC
 , tokW(pInvData->Pac)
-, toVolt(pInvData->Uac)
-, toAmp(pInvData->Iac)
 , toVolt(pInvData->Udc)
 , toAmp(pInvData->Idc)
+, toVolt(pInvData->Uac)
+, toAmp(pInvData->Iac)
 , tokWh(pInvData->EToday)
 , tokWh(pInvData->ETotal)
+, toHz(pInvData->Freq)
 , toPercent(pInvData->Eta)
 );
-  server.send(200, "text/plain", temp);
+  //server.send(200, "text/plain", temp);
+  server.send(200, "text/html", temp);
 }
 

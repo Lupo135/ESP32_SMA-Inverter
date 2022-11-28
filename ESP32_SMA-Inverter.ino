@@ -27,6 +27,7 @@ SOFTWARE.
 // 2=Values and Info and P-buffer
 // 3=Values and Info and T+R+P-buffer
 #define DEBUG_SMA 1
+#define LOOPTIME_SEC 20
 
 #include <Esp.h>
 #include "Arduino.h"
@@ -51,7 +52,9 @@ const char SmaInvPass[]={'P','a','s','s','w','o','r','d',0,0,0,0};
 uint8_t SmaBTAddress[6]  = {0x00, 0x80, 0x25, 0x29, 0xEB, 0xD3}; // my SMA SMC6000TL 00:80:25:29:eb:d3 
 uint8_t EspBTAddress[6]; // is retrieved from BT packet
 uint32_t nextTime = 0;
-
+uint8_t cycle = 0;
+uint8_t errCnt = 0;
+bool    reconnect = false;
 
 #include "SMA_bluetooth.h"
 #include "SMA_Inverter.h"
@@ -80,7 +83,7 @@ void setup() {
   server.begin();
   DEBUG1_PRINTLN("HTTP Server started");
 #endif
-    // **** Connect SMA **********
+  // **** Connect SMA **********
   DEBUG1_PRINT("Connecting to SMA inverter");
   while (1) {
     if (SerialBT.connect(SmaBTAddress)) {
@@ -104,28 +107,74 @@ void setup() {
 } 
 
 void loop() { 
-  #define LOOPTIME_SEC 20
   if (nextTime<millis()) {
     nextTime += LOOPTIME_SEC*1000;
+    cycle = 0;
     if (nextTime<millis()) nextTime = LOOPTIME_SEC*1000+millis();
+  }
+    
+  switch (cycle) {
+    case 0: if ((getInverterData(SpotGridFrequency)) != 0) {
+              DEBUG1_PRINTLN("SpotGridFrequency error!");
+              errCnt++;
+            }
+            cycle++; break;
+    case 1: if ((getInverterData(SpotACTotalPower)) != 0)  {
+              DEBUG1_PRINTLN("SpotACTotalPower error!" ); // Pac
+              errCnt++;
+            }
+            cycle++; break;
+    case 2: if ((getInverterData(SpotACVoltage)) != 0)     {
+              DEBUG1_PRINTLN("getSpotACVoltage error!" ); // Uac + Iac
+              errCnt++;
+            }
+            cycle++; break;
+    case 3: if ((getInverterData(SpotDCVoltage)) != 0)     {
+              DEBUG1_PRINTLN("getSpotDCVoltage error!" ); // Udc + Idc
+              errCnt++;
+            }
+            cycle++; break;
+    case 4: if ((getInverterData(EnergyProduction)) != 0)  {
+              DEBUG1_PRINTLN("EnergyProduction error!" ); // E-Total + E-Today
+              errCnt++;
+            }
+            DEBUG1_PRINT("\n *************************"   );
+            if (errCnt>2) {
+              reconnect = true;
+              errCnt=0;
+            }
 
-    if ((getInverterData(SpotGridFrequency)) != 0) DEBUG1_PRINTLN("SpotGridFrequency error!");
-    if ((getInverterData(SpotACTotalPower)) != 0)  DEBUG1_PRINTLN("SpotACTotalPower error!" ); // Pac
-    if ((getInverterData(SpotACVoltage)) != 0)     DEBUG1_PRINTLN("getSpotACVoltage error!" ); // Uac + Iac
-    if ((getInverterData(SpotDCVoltage)) != 0)     DEBUG1_PRINTLN("getSpotDCVoltage error!" ); // Udc + Idc
-    if ((getInverterData(EnergyProduction)) != 0)  DEBUG1_PRINTLN("EnergyProduction error!" ); // E-Total + E-Today
-  //if ((getInverterData(SpotDCPower)) != 0)       DEBUG1_PRINTLN("getSpotDCPower error!"   ); //pcktBuf[23]=15 error!
-  //if ((getInverterData(SpotACPower)) != 0)       DEBUG1_PRINTLN("SpotACPower error!"      ); //pcktBuf[23]=15 error!
-  //if ((getInverterData(InverterTemp)) != 0)      DEBUG1_PRINTLN("InverterTemp error!"     ); //pcktBuf[23]=15 error!
+            cycle++; break;
+    //case 5: if ((getInverterData(SpotDCPower)) != 0)       DEBUG1_PRINTLN("getSpotDCPower error!"   ); //pcktBuf[23]=15 error!
+    //case 6: if ((getInverterData(SpotACPower)) != 0)       DEBUG1_PRINTLN("SpotACPower error!"      ); //pcktBuf[23]=15 error!
+    //case 7: if ((getInverterData(InverterTemp)) != 0)      DEBUG1_PRINTLN("InverterTemp error!"     ); //pcktBuf[23]=15 error!
+    default: break;
+  }  // switch
 
-  // **** calculate efficiency *
-  // if ((pInvData->Udc!=0) && (pInvData->Idc != 0))
-  // DEBUG1_PRINTF("\nEfficiency %8.2f %%  ", 
-  //     (double)pInvData->Uac * pInvData->Iac / (double)(pInvData->Udc * pInvData->Idc ) * 100);
-    DEBUG1_PRINT("\n *************************"   );
+  if (reconnect) {
+    pcktID = 1;
+    // **** Connect SMA **********
+    DEBUG1_PRINT("Connecting to SMA inverter");
+    while (1) {
+      if (SerialBT.connect(SmaBTAddress)) {
+        break;
+      } else {
+          DEBUG1_PRINT("."); 
+          delay(20000);
+      }
+    }
+    // **** Initialize SMA *******
+    DEBUG1_PRINTLN("\n*** Initialize");
+    E_RC rc = initialiseSMAConnection();
+   
+    getBT_SignalStrength();
+    
+    // **** logon SMA ************
+    DEBUG1_PRINT("\n*** logonSMAInverter");
+    rc = logonSMAInverter(SmaInvPass, USERGROUP);
 
-  // **** delay ****************
-    //delay(20000);
+  } else {
+    delay(1000);
   }
 
   #ifdef SMA_WEBSERVER
