@@ -52,6 +52,9 @@ SOFTWARE.
   #define  DEBUG3_PRINTLN(...) /**/
 #endif
 
+#define CHAR_BUF_SIZE 24
+char charBuf[CHAR_BUF_SIZE];
+
 void HexDump(uint8_t *buf, int count, int radix, uint8_t c) {
   int i, j;
   DEBUG2_PRINTF("\n---%c----:", c);
@@ -66,7 +69,7 @@ void HexDump(uint8_t *buf, int count, int radix, uint8_t c) {
   DEBUG2_PRINT("\n");
 }
 //-----------------------------------------------------
- void printUnixTime(time_t t) {
+ uint8_t printUnixTime(char *buf, time_t t) {
     uint32_t a, b, c, d, e, f;
     //Negative Unix time values are not supported
     if(t < 1) t = 0;
@@ -99,7 +102,8 @@ void HexDump(uint8_t *buf, int count, int radix, uint8_t c) {
     uint16_t year = c;
     uint8_t  month = e;
     uint8_t  day = f;
-    DEBUG1_PRINTF(" GMT: %d.%02d.%d %02d:%02d:%02d",day, month, year, hours, minutes, seconds);
+    return snprintf(buf, CHAR_BUF_SIZE,"%02d.%02d.%d %02d:%02d:%02d",day, month, year, hours, minutes, seconds);
+    //DEBUG1_PRINTF(" GMT: %02d.%02d.%d %02d:%02d:%02d",day, month, year, hours, minutes, seconds);
  }
 
 //-----------------------------------------------------

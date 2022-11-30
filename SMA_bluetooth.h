@@ -41,7 +41,7 @@ uint8_t BTgetByte() {
   uint8_t  rec = 0;  
 
   while (!SerialBT.available() ) {
-    delay(5);  //Wait for BT byte to arrive
+    //delay(5);  //Wait for BT byte to arrive
     if (millis() > time) { 
       DEBUG2_PRINTLN("BTgetByte Timeout");
       ReadTimeout = true;

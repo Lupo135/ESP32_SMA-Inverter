@@ -31,8 +31,11 @@ SOFTWARE.
 #define toPercent(value32)(float)(value32)/100
 #define toTemp(value32)   (float)(value32)/100
 
-int32_t value32 = 0;
-int64_t value64 = 0;
+int32_t  value32 = 0;
+int64_t  value64 = 0;
+uint64_t totalWh = 0;
+uint64_t totalWh_prev = 0;
+time_t   dateTime = 0;
 
 #define UG_USER      0x07
 #define UG_INSTALLER 0x0A
@@ -48,8 +51,10 @@ enum E_RC {
     E_BADARG =       -7,    // Invalid data type
     E_CHKSUM =       -8,    // Invalid checksum
     E_INVRESP =      -9,    // Invalid response
+    E_ARCHNODATA =   -10,   // no archive data
 };
 
+#define ARCH_DAY_SIZE 288
 struct InverterData {
     uint8_t BTAddress[6];
     uint8_t SUSyID;
@@ -65,6 +70,13 @@ struct InverterData {
     int32_t Eta;
     uint64_t EToday;
     uint64_t ETotal;
+  //DayData dayData[288];
+    uint64_t dayWh[ARCH_DAY_SIZE];
+  //int32_t dayW[ARCH_DAY_SIZE];
+    time_t  DayStartTime;
+    bool hasDayData;
+    bool hasMonthData;
+    time_t   LastTime;
     uint64_t OperationTime;
     uint64_t FeedInTime;
     E_RC     status;
@@ -162,7 +174,7 @@ enum LriDef {
 // MultiPacket:
 //  Packet-first: Cmd0=08 Byte[18]=0x7E
 //  Packet-last : Cmd1=01=cmdcodetowait 
-#pragma pack 1
+#pragma pack (push, 1)
 typedef struct __attribute__ ((packed)) PacketHeader {
     uint8_t   SOP;                // Start Of Packet (0x7E)
     uint16_t  pkLength;
@@ -187,7 +199,7 @@ bool isValidSender(uint8_t expAddr[6], uint8_t isAddr[6]) {
 // ----------------------------------------------------------------------------------------------
 //unsigned int readBtPacket(int index, unsigned int cmdcodetowait) {
 E_RC getPacket(uint8_t expAddr[6], int wait4Command) {
-  DEBUG2_PRINTF("\ngetPacket command=0x%04x\n", wait4Command);
+  DEBUG3_PRINTF("getPacket cmd=0x%04x\n", wait4Command);
   int index = 0;
   bool hasL2pckt = false;
   E_RC rc = E_OK; 
@@ -199,26 +211,27 @@ E_RC getPacket(uint8_t expAddr[6], int wait4Command) {
       BTrdBuf[rdCnt]= BTgetByte();
       if (ReadTimeout)  break;
     }
-    if (rdCnt<17) return E_NODATA;
-    // Validate L1 header
-   if (!((BTrdBuf[0] ^ BTrdBuf[1] ^ BTrdBuf[2]) == BTrdBuf[3])) {
-     DEBUG1_PRINT("\nWrong L1 CRC!!" );
-   }
-   //#if (DEBUG_SMA > 2)
-   //  HexDump(BTrdBuf, rdCnt, 10, 'R');
-   //#endif
-   //  return 1;
-   //}
-
-    DEBUG2_PRINTF("L1 Rec=%d bytes pkL=0x%04x=%d Cmd=0x%04x\n",
+    DEBUG2_PRINTF("\nL1 Rec=%d bytes pkL=0x%04x=%d Cmd=0x%04x\n",
         rdCnt, pL1Hdr->pkLength, pL1Hdr->pkLength, pL1Hdr->command);
+
+    if (rdCnt<17) {
+      DEBUG3_PRINTF("L1<18=%d bytes", rdCnt);
+      #if (DEBUG_SMA > 2)
+      HexDump(BTrdBuf, rdCnt, 10, 'R');
+      #endif
+      return E_NODATA;
+    }
+    // Validate L1 header
+    if (!((BTrdBuf[0] ^ BTrdBuf[1] ^ BTrdBuf[2]) == BTrdBuf[3])) {
+      DEBUG1_PRINT("\nWrong L1 CRC!!" );
+    }
 
     if (pL1Hdr->pkLength > sizeof(L1Hdr)) { // more bytes to read
       for (rdCnt=18; rdCnt<pL1Hdr->pkLength; rdCnt++) {
         BTrdBuf[rdCnt]= BTgetByte();
         if (ReadTimeout) break;
       }
-      DEBUG3_PRINTF("L2 Rec=%d bytes\n", rdCnt);
+      DEBUG3_PRINTF("L2 Rec=%d bytes", rdCnt-18);
       #if (DEBUG_SMA > 2)
       HexDump(BTrdBuf, rdCnt, 10, 'R');
       #endif
@@ -227,7 +240,7 @@ E_RC getPacket(uint8_t expAddr[6], int wait4Command) {
       if (isValidSender(expAddr, pL1Hdr->SourceAddr)) {
         rc = E_OK;
 
-        DEBUG2_PRINTF("\nHasL2pckt: 0x7E?=0x%02X 0x656003FF?=0x%08X\n", BTrdBuf[18], get_u32(BTrdBuf+19));
+        DEBUG2_PRINTF("HasL2pckt: 0x7E?=0x%02X 0x656003FF?=0x%08X\n", BTrdBuf[18], get_u32(BTrdBuf+19));
         if ((hasL2pckt == 0) && (BTrdBuf[18] == 0x7E) && (get_u32(BTrdBuf+19) == 0x656003FF)) {
           hasL2pckt = true;
         }
@@ -235,7 +248,6 @@ E_RC getPacket(uint8_t expAddr[6], int wait4Command) {
         if (hasL2pckt) {
           //Copy BTrdBuf to pcktBuf
           bool escNext = false;
-          DEBUG2_PRINTF("PacketLength=%d\n", pL1Hdr->pkLength);
 
           for (int i=sizeof(L1Hdr); i<pL1Hdr->pkLength; i++) {
             pcktBuf[index] = BTrdBuf[i];
@@ -352,7 +364,7 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
             value32 = 0;
             value64 = 0;
             uint16_t recordsize = 4 * ((uint32_t)pcktBuf[5] - 9) / (get_u32(pcktBuf + 37) - get_u32(pcktBuf + 33) + 1);
-            DEBUG2_PRINTF("\rpcktID=0x%04x recsize=%d BufPos=%d pcktCnt=%04x", 
+            DEBUG2_PRINTF("\npcktID=0x%04x recsize=%d BufPos=%d pcktCnt=%04x", 
                             rcvpcktID,   recordsize, pcktBufPos, pcktcount);
             for (uint16_t ii = 41; ii < pcktBufPos - 3; ii += recordsize) {
               uint8_t *recptr = pcktBuf + ii;
@@ -376,25 +388,25 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
               switch (lri) {
               case GridMsTotW: //SPOT_PACTOT
                   //This function gives us the time when the inverter was switched off
-                  //pInvData->SleepTime = datetime;
+                  pInvData->LastTime = datetime;
                   pInvData->Pac = value32;
                   //debug_watt("SPOT_PACTOT", value32, datetime);
-                  DEBUG1_PRINTF("\nPac %15.3f kW ", tokW(value32));
-                  printUnixTime(datetime);
+                  printUnixTime(charBuf, datetime);
+                  DEBUG1_PRINTF("\nPac %15.3f kW GMT:%s", tokW(value32), charBuf);
                   break;
        
               case GridMsWphsA: //SPOT_PAC1
                   pInvData->Pmax = value32;
                   //debug_watt("SPOT_PAC1", value32, datetime);
                   DEBUG1_PRINTF("\nPmax %14.2f kW ", tokW(value32));
-                  printUnixTime(datetime);
+                  //printUnixTime(charBuf, datetime);
                   break;
        
               case GridMsPhVphsA: //SPOT_UAC1
                   pInvData->Uac = value32;
                   //debug_volt("SPOT_UAC1", value32, datetime);
                   DEBUG1_PRINTF("\nUac %15.2f V  ", toVolt(value32));
-                  printUnixTime(datetime);
+                  //printUnixTime(charBuf, datetime);
                   break;
        
               case GridMsAphsA_1: //SPOT_IAC1
@@ -402,30 +414,30 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
                   pInvData->Iac = value32;
                   //debug_amp("SPOT_IAC1", value32, datetime);
                   DEBUG1_PRINTF("\nIac %15.2f A  ", toAmp(value32));
-                  printUnixTime(datetime);
+                  //printUnixTime(charBuf, datetime);
                   break;
        
               case GridMsHz: //SPOT_FREQ
                   pInvData->Freq = value32;
                   DEBUG1_PRINTF("\nFreq %14.2f Hz ", toHz(value32));
-                  printUnixTime(datetime);
+                  //printUnixTime(charBuf, datetime);
                   break;
        
               case DcMsWatt: //SPOT_PDC1 / SPOT_PDC2
                   DEBUG1_PRINTF("\nPDC %15.2f kW ", tokW(value32));
-                  printUnixTime(datetime);
+                  //printUnixTime(charBuf, datetime);
                   break;
        
               case DcMsVol: //SPOT_UDC1 / SPOT_UDC2
                   pInvData->Udc = value32;
                   DEBUG1_PRINTF("\nUdc %15.2f V  ", toVolt(value32));
-                  printUnixTime(datetime);
+                  //printUnixTime(charBuf, datetime);
                   break;
        
               case DcMsAmp: //SPOT_IDC1 / SPOT_IDC2
                   pInvData->Idc = value32;
                   DEBUG1_PRINTF("\nIdc %15.2f A  ", toAmp(value32));
-                  printUnixTime(datetime);
+                  //printUnixTime(charBuf, datetime);
                   if ((pInvData->Udc!=0) && (pInvData->Idc != 0))
                     pInvData->Eta = ((uint64_t)pInvData->Uac * (uint64_t)pInvData->Iac * 10000) /
                                     ((uint64_t)pInvData->Udc * (uint64_t)pInvData->Idc );
@@ -439,7 +451,7 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
                   pInvData->EToday = value64;
                   //debug_kwh("SPOT_ETODAY", value64, datetime);
                   DEBUG1_PRINTF("\nE-Today %11.3f kWh", tokWh(value64));
-                  printUnixTime(datetime);
+                  //printUnixTime(charBuf, datetime);
                   break;
        
               case MeteringTotWhOut: //SPOT_ETOTAL
@@ -448,21 +460,21 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
                   pInvData->ETotal = value64;
                   //debug_kwh("SPOT_ETOTAL", value64, datetime);
                   DEBUG1_PRINTF("\nE-Total %11.3f kWh", tokWh(value64));
-                  printUnixTime(datetime);
+                  //printUnixTime(charBuf, datetime);
                   break;
        
               case MeteringTotOpTms: //SPOT_OPERTM
                   pInvData->OperationTime = value64;
                   //debug_hour("SPOT_OPERTM", value64, datetime);
                   DEBUG1_PRINTF("\nOperTime  %7.3f h  ", toHour(value64));
-                  printUnixTime(datetime);
+                  //printUnixTime(charBuf, datetime);
                   break;
        
               case MeteringTotFeedTms: //SPOT_FEEDTM
                   pInvData->FeedInTime = value64;
                   //debug_hour("SPOT_FEEDTM", value64, datetime);
                   DEBUG1_PRINTF("\nFeedTime  %7.3f h  ", toHour(value64));
-                  printUnixTime(datetime);
+                  //printUnixTime(charBuf, datetime);
                   break;
        
               case CoolsysTmpNom:
@@ -623,7 +635,7 @@ E_RC getInverterData(enum getInverterDataType type) {
   for (uint8_t retries=1;; retries++) {
     rc = getInverterDataCfl(command, first, last);
     if (rc != E_OK) {
-      if (retries>2) {
+      if (retries>1) {
          return rc;
       }
       DEBUG2_PRINTF("\nRetrying.%d",retries);
@@ -650,7 +662,7 @@ bool getBT_SignalStrength() {
 }
 //-------------------------------------------------------------------------
 E_RC initialiseSMAConnection() {
-  DEBUG2_PRINTLN("Connected succesfully! -> Initialize");
+  DEBUG2_PRINTLN(" -> Initialize");
   getPacket(pInvData->BTAddress, 2); // 1. Receive
   pInvData->NetID = pcktBuf[22];
   DEBUG2_PRINTF("SMA netID=%02X\n", pInvData->NetID);
@@ -732,7 +744,7 @@ E_RC logonSMAInverter(const char *password, const uint8_t user) {
       // switch (retcode) {
       //     case 0: rc = E_OK; break;
       //     case 0x0100: rc = E_INVPASSW; break;
-      //     default: rc = (E_SBFSPOT)retcode; break;
+      //     default: rc = (E_RC)retcode; break;
       // }
     } else { 
       DEBUG1_PRINTF("Unexpected response  %02X:%02X:%02X:%02X:%02X:%02X pcktID=0x%04X rcvpcktID=0x%04X now=0x%04X", 
@@ -742,3 +754,109 @@ E_RC logonSMAInverter(const char *password, const uint8_t user) {
     }
     return rc;
 }
+
+// ******* Archive Day Data **********
+E_RC ArchiveDayData(time_t startTime) {
+  DEBUG2_PRINT("\n*** ArchiveDayData ***");
+  printUnixTime(charBuf, startTime); DEBUG2_PRINTF("\nStartTime0 GMT:%s", charBuf);
+  // set time to begin of day
+  uint8_t minutes = (startTime/60) % 60;
+  uint8_t hours = (startTime/(60*60)) % 24;
+  startTime -= minutes*60 + hours*60*60;
+  printUnixTime(charBuf, startTime); DEBUG2_PRINTF("\nStartTime2 GMT:%s", charBuf);
+
+  E_RC rc = E_OK;
+
+  for (unsigned int i = 0; i<ARCH_DAY_SIZE; i++) {
+     pInvData->dayWh[i] = 0;
+  }
+  pInvData->hasDayData = false;
+
+  int packetcount = 0;
+  bool validPcktID = false;
+
+  E_RC hasData = E_ARCHNODATA;
+  pcktID++;
+  writePacketHeader(pcktBuf, 0x01, pInvData->BTAddress);
+  writePacket(pcktBuf, 0x09, 0xE0, 0, pInvData->SUSyID, pInvData->Serial);
+  write32(pcktBuf, 0x70000200);
+  write32(pcktBuf, startTime - 300);
+  write32(pcktBuf, startTime + 86100);
+  writePacketTrailer(pcktBuf);
+  writePacketLength(pcktBuf);
+
+  BTsendPacket(pcktBuf);
+
+  do {
+    totalWh = 0;
+    totalWh_prev = 0;
+    dateTime = 0;
+
+    do {
+      rc = getPacket(pInvData->BTAddress, 1);
+
+      if (rc != E_OK) {
+         DEBUG3_PRINTF("\ngetPacket error=%d", rc);
+         return rc;
+      }
+      // packetcount=nr of packets left on multi packet transfer n..0
+      packetcount = pcktBuf[25];
+      DEBUG2_PRINTF("packetcount=%d\n", packetcount);
+
+      //TODO: Move checksum validation to getPacket
+      if (!validateChecksum())
+        return E_CHKSUM;
+      else {
+        unsigned short rcvpcktID = get_u16(pcktBuf + 27) & 0x7FFF;
+        if (validPcktID || (pcktID == rcvpcktID)) {
+          validPcktID = true;
+          for (int x = 41; x < (pcktBufPos - 3); x += 12) {
+            dateTime = (time_t)get_u32(pcktBuf + x);
+            uint16_t idx =((dateTime/3600)%24 * 12)+((dateTime/60)%60/5); //h*12+min/5
+
+            totalWh = get_u64(pcktBuf + x + 4);
+            if ((totalWh > 0) && (!pInvData->hasDayData)) { 
+              pInvData->DayStartTime = dateTime;
+              pInvData->hasDayData = true;
+              hasData = E_OK; 
+              printUnixTime(charBuf, dateTime); 
+              DEBUG1_PRINTF("\nArchiveDayData %s", charBuf);
+            }
+            if (idx < ARCH_DAY_SIZE) {
+              pInvData->dayWh[idx] = totalWh;
+              value64 = (totalWh - totalWh_prev) * 60 / 5; // assume 5 min. interval
+              DEBUG3_PRINTF("[%03u] %6llu Wh %6llu W\n", idx, totalWh, value64);
+            }
+            totalWh_prev = totalWh;
+          } //for
+        } else {
+            DEBUG1_PRINTF("Packet ID mismatch. Exp. %d, rec. %d\n", pcktID, rcvpcktID);
+            validPcktID = true;
+            packetcount = 0;
+        }
+      }
+    } while (packetcount > 0);
+  } while (!validPcktID);
+
+  /* print values
+  time_t startT = pInvData->DayStartTime;
+  printUnixTime(charBuf, startT);
+  DEBUG2_PRINTF("Day History: %s\n", charBuf);
+  totalWh_prev = 0;
+
+  for (uint16_t i = 0; i<ARCH_DAY_SIZE; i++) {
+    totalWh = pInvData->dayWh[i];
+    value32=0;
+    if ((totalWh>0) && (totalWh_prev>0)) {
+      value32 = (uint32_t)((totalWh - totalWh_prev)*60/5); 
+    }
+    if (totalWh>0) {
+      printUnixTime(charBuf, startT+3600+i*60*5); // GMT+1 + 5 min. interval
+      DEBUG2_PRINTF("[%03d] %11.3f kWh  %7.3f kW %s\n", i, tokWh(totalWh), tokW(value32), charBuf);
+    }
+    totalWh_prev = totalWh;
+  }
+  */
+  return hasData;
+}
+
