@@ -391,22 +391,22 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
                   pInvData->LastTime = datetime;
                   pInvData->Pac = value32;
                   //debug_watt("SPOT_PACTOT", value32, datetime);
-                  printUnixTime(charBuf, datetime);
-                  DEBUG1_PRINTF("\nPac %15.3f kW GMT:%s", tokW(value32), charBuf);
+                  printUnixTime(timeBuf, datetime);
+                  DEBUG1_PRINTF("\nPac %15.3f kW GMT:%s", tokW(value32), timeBuf);
                   break;
        
               case GridMsWphsA: //SPOT_PAC1
                   pInvData->Pmax = value32;
                   //debug_watt("SPOT_PAC1", value32, datetime);
                   DEBUG1_PRINTF("\nPmax %14.2f kW ", tokW(value32));
-                  //printUnixTime(charBuf, datetime);
+                  //printUnixTime(timeBuf, datetime);
                   break;
        
               case GridMsPhVphsA: //SPOT_UAC1
                   pInvData->Uac = value32;
                   //debug_volt("SPOT_UAC1", value32, datetime);
                   DEBUG1_PRINTF("\nUac %15.2f V  ", toVolt(value32));
-                  //printUnixTime(charBuf, datetime);
+                  //printUnixTime(timeBuf, datetime);
                   break;
        
               case GridMsAphsA_1: //SPOT_IAC1
@@ -414,30 +414,30 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
                   pInvData->Iac = value32;
                   //debug_amp("SPOT_IAC1", value32, datetime);
                   DEBUG1_PRINTF("\nIac %15.2f A  ", toAmp(value32));
-                  //printUnixTime(charBuf, datetime);
+                  //printUnixTime(timeBuf, datetime);
                   break;
        
               case GridMsHz: //SPOT_FREQ
                   pInvData->Freq = value32;
                   DEBUG1_PRINTF("\nFreq %14.2f Hz ", toHz(value32));
-                  //printUnixTime(charBuf, datetime);
+                  //printUnixTime(timeBuf, datetime);
                   break;
        
               case DcMsWatt: //SPOT_PDC1 / SPOT_PDC2
                   DEBUG1_PRINTF("\nPDC %15.2f kW ", tokW(value32));
-                  //printUnixTime(charBuf, datetime);
+                  //printUnixTime(timeBuf, datetime);
                   break;
        
               case DcMsVol: //SPOT_UDC1 / SPOT_UDC2
                   pInvData->Udc = value32;
                   DEBUG1_PRINTF("\nUdc %15.2f V  ", toVolt(value32));
-                  //printUnixTime(charBuf, datetime);
+                  //printUnixTime(timeBuf, datetime);
                   break;
        
               case DcMsAmp: //SPOT_IDC1 / SPOT_IDC2
                   pInvData->Idc = value32;
                   DEBUG1_PRINTF("\nIdc %15.2f A  ", toAmp(value32));
-                  //printUnixTime(charBuf, datetime);
+                  //printUnixTime(timeBuf, datetime);
                   if ((pInvData->Udc!=0) && (pInvData->Idc != 0))
                     pInvData->Eta = ((uint64_t)pInvData->Uac * (uint64_t)pInvData->Iac * 10000) /
                                     ((uint64_t)pInvData->Udc * (uint64_t)pInvData->Idc );
@@ -451,7 +451,7 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
                   pInvData->EToday = value64;
                   //debug_kwh("SPOT_ETODAY", value64, datetime);
                   DEBUG1_PRINTF("\nE-Today %11.3f kWh", tokWh(value64));
-                  //printUnixTime(charBuf, datetime);
+                  //printUnixTime(timeBuf, datetime);
                   break;
        
               case MeteringTotWhOut: //SPOT_ETOTAL
@@ -460,21 +460,21 @@ E_RC getInverterDataCfl(uint32_t command, uint32_t first, uint32_t last) {
                   pInvData->ETotal = value64;
                   //debug_kwh("SPOT_ETOTAL", value64, datetime);
                   DEBUG1_PRINTF("\nE-Total %11.3f kWh", tokWh(value64));
-                  //printUnixTime(charBuf, datetime);
+                  //printUnixTime(timeBuf, datetime);
                   break;
        
               case MeteringTotOpTms: //SPOT_OPERTM
                   pInvData->OperationTime = value64;
                   //debug_hour("SPOT_OPERTM", value64, datetime);
                   DEBUG1_PRINTF("\nOperTime  %7.3f h  ", toHour(value64));
-                  //printUnixTime(charBuf, datetime);
+                  //printUnixTime(timeBuf, datetime);
                   break;
        
               case MeteringTotFeedTms: //SPOT_FEEDTM
                   pInvData->FeedInTime = value64;
                   //debug_hour("SPOT_FEEDTM", value64, datetime);
                   DEBUG1_PRINTF("\nFeedTime  %7.3f h  ", toHour(value64));
-                  //printUnixTime(charBuf, datetime);
+                  //printUnixTime(timeBuf, datetime);
                   break;
        
               case CoolsysTmpNom:
@@ -758,12 +758,12 @@ E_RC logonSMAInverter(const char *password, const uint8_t user) {
 // ******* Archive Day Data **********
 E_RC ArchiveDayData(time_t startTime) {
   DEBUG2_PRINT("\n*** ArchiveDayData ***");
-  printUnixTime(charBuf, startTime); DEBUG2_PRINTF("\nStartTime0 GMT:%s", charBuf);
+  printUnixTime(timeBuf, startTime); DEBUG2_PRINTF("\nStartTime0 GMT:%s", timeBuf);
   // set time to begin of day
   uint8_t minutes = (startTime/60) % 60;
   uint8_t hours = (startTime/(60*60)) % 24;
   startTime -= minutes*60 + hours*60*60;
-  printUnixTime(charBuf, startTime); DEBUG2_PRINTF("\nStartTime2 GMT:%s", charBuf);
+  printUnixTime(timeBuf, startTime); DEBUG2_PRINTF("\nStartTime2 GMT:%s", timeBuf);
 
   E_RC rc = E_OK;
 
@@ -819,8 +819,8 @@ E_RC ArchiveDayData(time_t startTime) {
               pInvData->DayStartTime = dateTime;
               pInvData->hasDayData = true;
               hasData = E_OK; 
-              printUnixTime(charBuf, dateTime); 
-              DEBUG1_PRINTF("\nArchiveDayData %s", charBuf);
+              printUnixTime(timeBuf, dateTime); 
+              DEBUG1_PRINTF("\nArchiveDayData %s", timeBuf);
             }
             if (idx < ARCH_DAY_SIZE) {
               pInvData->dayWh[idx] = totalWh;
@@ -840,8 +840,8 @@ E_RC ArchiveDayData(time_t startTime) {
 
   /* print values
   time_t startT = pInvData->DayStartTime;
-  printUnixTime(charBuf, startT);
-  DEBUG2_PRINTF("Day History: %s\n", charBuf);
+  printUnixTime(timeBuf, startT);
+  DEBUG2_PRINTF("Day History: %s\n", timeBuf);
   totalWh_prev = 0;
 
   for (uint16_t i = 0; i<ARCH_DAY_SIZE; i++) {
@@ -851,12 +851,46 @@ E_RC ArchiveDayData(time_t startTime) {
       value32 = (uint32_t)((totalWh - totalWh_prev)*60/5); 
     }
     if (totalWh>0) {
-      printUnixTime(charBuf, startT+3600+i*60*5); // GMT+1 + 5 min. interval
-      DEBUG2_PRINTF("[%03d] %11.3f kWh  %7.3f kW %s\n", i, tokWh(totalWh), tokW(value32), charBuf);
+      printUnixTime(timeBuf, startT+3600+i*60*5); // GMT+1 + 5 min. interval
+      DEBUG2_PRINTF("[%03d] %11.3f kWh  %7.3f kW %s\n", i, tokWh(totalWh), tokW(value32), timeBuf);
     }
     totalWh_prev = totalWh;
   }
   */
   return hasData;
 }
+
+// ******* read SMA current data **********
+E_RC ReadCurrentData() {
+  if (!btConnected) {
+    charLen += snprintf(charBuf+charLen, CHAR_BUF_MAX-charLen, "Bluetooth offline!\n");
+    return E_NODATA;
+  }
+  if ((getInverterData(SpotACTotalPower)) != E_OK)  {
+    charLen += snprintf(charBuf+charLen, CHAR_BUF_MAX-charLen, "SpotACTotalPower error!\n" ); // Pac
+    return E_NODATA;
+  }
+  if ((getInverterData(SpotDCVoltage)) != E_OK)     {
+    charLen += snprintf(charBuf+charLen, CHAR_BUF_MAX-charLen, "getSpotDCVoltage error!\n" ); // Udc + Idc
+    return E_NODATA;
+  }
+  if ((getInverterData(SpotACVoltage)) != E_OK)     {
+    charLen += snprintf(charBuf+charLen, CHAR_BUF_MAX-charLen, "getSpotACVoltage error!\n" ); // Uac + Iac
+    return E_NODATA;
+  }
+  if ((getInverterData(EnergyProduction)) != E_OK)  {
+    charLen += snprintf(charBuf+charLen, CHAR_BUF_MAX-charLen, "EnergyProduction error!\n" ); // E-Total + E-Today
+    return E_NODATA;
+  }
+  if ((getInverterData(SpotGridFrequency)) != E_OK) {
+    charLen += snprintf(charBuf+charLen, CHAR_BUF_MAX-charLen, "SpotGridFrequency error!\n");
+    return E_NODATA;
+  }
+
+//case 5: if ((getInverterData(SpotDCPower)) != E_OK)   DEBUG1_PRINTLN("getSpotDCPower error!"); //pcktBuf[23]=15 error!
+//case 6: if ((getInverterData(SpotACPower)) != E_OK)   DEBUG1_PRINTLN("SpotACPower error!"   ); //pcktBuf[23]=15 error!
+//case 7: if ((getInverterData(InverterTemp)) != E_OK)  DEBUG1_PRINTLN("InverterTemp error!"  ); //pcktBuf[23]=15 error!
+//case 8: if ((getInverterData(OperationTime)) != E_OK) DEBUG1_PRINTLN("OperationTime error!" ); // OperTime + OperTime
+  return E_OK;
+} 
 

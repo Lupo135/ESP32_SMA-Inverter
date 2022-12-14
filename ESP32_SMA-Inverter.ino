@@ -44,9 +44,13 @@ const char BTPin[] = {'0','0','0','0',0}; // BT pin Always 0000. (not login pass
 uint8_t  EspBTAddress[6]; // is retrieved from BT packet
 uint32_t nextTime = 0;
 uint32_t nextInterval = 10*1000; // 10 sec.
-uint16_t cycle = 0;
 uint8_t  errCnt = 0;
 bool     btConnected = false;
+
+#define CHAR_BUF_MAX 2048
+char timeBuf[24];
+char charBuf[CHAR_BUF_MAX];
+int  charLen = 0;
 
 #include "SMA_bluetooth.h"
 #include "SMA_Inverter.h"
@@ -80,12 +84,6 @@ void setup() {
 
   // **** Loop ************
 void loop() { 
-  if ((nextTime<millis()) && (cycle>4)) {
-    nextTime += LOOPTIME_SEC*1000;
-    if (btConnected) cycle = 0; // -> start reading inverter
-    if (nextTime<millis()) nextTime = LOOPTIME_SEC*1000+millis();
-  }
-
   // connect or reconnect after connection lost 
   if ((nextTime<millis()) && (!btConnected)) {
     nextTime = millis()+nextInterval;
@@ -94,7 +92,6 @@ void loop() {
     DEBUG1_PRINT("\nConnecting SMA inverter: ");
     if (SerialBT.connect(SmaBTAddress)) {
       btConnected = true;
-      cycle = 0;
       nextInterval = 10*1000; // 10 sec.
       // **** Initialize SMA *******
       DEBUG1_PRINTLN("connected");
@@ -105,55 +102,12 @@ void loop() {
       // **** logon SMA ************
       DEBUG1_PRINT("\n*** logonSMAInverter");
       rc = logonSMAInverter(SmaInvPass, USERGROUP);
+      ReadCurrentData();
     } else {  // failed to connect
       if (nextInterval<10*60*1000) nextInterval += 1*60*1000;
     } 
   } 
   
-  if (btConnected) {
-    switch (cycle) {
-      case 0: if ((getInverterData(SpotACTotalPower)) != 0)  {
-                DEBUG1_PRINTLN("SpotACTotalPower error!" ); // Pac
-                errCnt++;
-              }
-              cycle++; break;
-      case 1: if ((getInverterData(SpotDCVoltage)) != 0)     {
-                DEBUG1_PRINTLN("getSpotDCVoltage error!" ); // Udc + Idc
-                errCnt++;
-              }
-              cycle++; break;
-      case 2: if ((getInverterData(SpotACVoltage)) != 0)     {
-                DEBUG1_PRINTLN("getSpotACVoltage error!" ); // Uac + Iac
-                errCnt++;
-              }
-              cycle++; break;
-      case 3: if ((getInverterData(EnergyProduction)) != 0)  {
-                DEBUG1_PRINTLN("EnergyProduction error!" ); // E-Total + E-Today
-                errCnt++;
-              }
-              cycle++; break;
-      case 4: if ((getInverterData(SpotGridFrequency)) != 0) {
-                DEBUG1_PRINTLN("SpotGridFrequency error!");
-                errCnt++;
-              }
-
-              DEBUG1_PRINT("\n *************************"   );
-              if (errCnt>2) {
-                btConnected = false;
-                errCnt=0;
-              }
-              cycle++; break;
-//case 5: if ((getInverterData(SpotDCPower)) != 0)   DEBUG1_PRINTLN("getSpotDCPower error!"); //pcktBuf[23]=15 error!
-//case 6: if ((getInverterData(SpotACPower)) != 0)   DEBUG1_PRINTLN("SpotACPower error!"   ); //pcktBuf[23]=15 error!
-//case 7: if ((getInverterData(InverterTemp)) != 0)  DEBUG1_PRINTLN("InverterTemp error!"  ); //pcktBuf[23]=15 error!
-//case 8: if ((getInverterData(OperationTime)) != 0) DEBUG1_PRINTLN("OperationTime error!" ); // OperTime + OperTime
-      default: 
-             if (btConnected) delay(500);
-             cycle++; break;
-    } // switch
-  } //connected
-
-
   #ifdef SMA_WEBSERVER
     server.handleClient();  
   #endif
